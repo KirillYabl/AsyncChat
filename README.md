@@ -2,13 +2,23 @@
 
 ### How to install
 
-Python3 should be already installed. 
+Python3 should be already installed (version 3.6 or above).
 Then use `pip` (or `pip3`, if there is a conflict with Python2) to install dependencies:
+
 ```
 pip install -r requirements.txt
 ```
 
 ### How to use
+
+```bash
+python chat_listener.py -host HOST -p PORT -hp HISTORY_PATH
+```
+
+Параметры:
+  -host HOST host of chat
+  -p PORT, --port PORT port of chat
+  -hp HISTORY_PATH, --history_path HISTORY_PATH
 
 ### References
 
