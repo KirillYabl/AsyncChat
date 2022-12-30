@@ -14,7 +14,7 @@ class Options:
     history_path: Path
 
 
-async def tcp_echo_client(options: Options) -> None:
+async def echo_chat(options: Options) -> None:
     reader, writer = await asyncio.open_connection(options.host, options.port)
 
     async with aiofiles.open(options.history_path, 'a', encoding='UTF8') as f:
@@ -41,4 +41,4 @@ if __name__ == '__main__':
 
     options = Options(**args.__dict__)
 
-    asyncio.run(tcp_echo_client(options))
+    asyncio.run(echo_chat(options))
