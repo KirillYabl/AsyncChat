@@ -1,6 +1,9 @@
 import argparse
 import asyncio
 from dataclasses import dataclass
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -13,6 +16,7 @@ class Options:
 
 def make_msg(text: str, is_end: bool = False) -> bytes:
     """Make suitable for sending message: add newlines and convert to bytes"""
+    logger.debug(f'SEND: {text}')
     text = f'{text}\n'
     if is_end:
         # double \n, first for end line and second empty line for end message
@@ -23,8 +27,14 @@ def make_msg(text: str, is_end: bool = False) -> bytes:
 async def write_to_chat(options: Options) -> None:
     reader, writer = await asyncio.open_connection(options.host, options.port)
 
+    data = await reader.read(10000)
+    logger.debug(f'RECEIVE: {data.decode().strip()}')
+
     writer.write(make_msg(options.token))
     await writer.drain()
+
+    data = await reader.read(10000)
+    logger.debug(f'RECEIVE: {data.decode().strip()}')
 
     writer.write(make_msg(options.message, True))
     await writer.drain()
@@ -33,6 +43,7 @@ async def write_to_chat(options: Options) -> None:
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
     parser = argparse.ArgumentParser(
         prog='Async chat writer',
         description='Script for write to chat message',

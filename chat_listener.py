@@ -2,9 +2,12 @@ import argparse
 import asyncio
 from dataclasses import dataclass
 import datetime
+import logging
 from pathlib import Path
 
 import aiofiles
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -22,11 +25,12 @@ async def echo_chat(options: Options) -> None:
             data = await reader.readline()
             formatted_now = datetime.datetime.now().strftime('%d.%m.%y %H:%M')
             message = f'[{formatted_now}] {data.decode()}'
-            print(message, end='')
+            logger.debug(f'RECEIVE: {message.strip()}')
             await f.write(message)
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
     parser = argparse.ArgumentParser(
         prog='Async chat listener',
         description='Script for chat listening and write in file',
