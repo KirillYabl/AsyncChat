@@ -12,7 +12,7 @@ class Options:
     host: str
     port: int
     message: str
-    token: str = '4632b104-88ff-11ed-8c47-0242ac110002'
+    token: str
 
 
 def make_msg(text: str, is_end: bool = False) -> bytes:
@@ -61,6 +61,7 @@ if __name__ == '__main__':
     parser.add_argument('-host', '--host', type=str, required=True, help='host of chat')
     parser.add_argument('-p', '--port', type=int, required=True, help='port of chat')
     parser.add_argument('-m', '--message', type=str, required=True, help='message to send')
+    parser.add_argument('-t', '--token', type=str, default='', help='token of registered user')
 
     args = parser.parse_args()
 

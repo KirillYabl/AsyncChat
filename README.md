@@ -25,13 +25,14 @@ python chat_listener.py -host HOST -p PORT -hp HISTORY_PATH
 #### Chat writer
 
 ```bash
-python chat_writer.py -host HOST -p PORT -m MESSAGE
+python chat_writer.py -host HOST -p PORT -m MESSAGE [-t TOKEN]
 ```
 
 Параметры:
   -host HOST, --host HOST host of chat
   -p PORT, --port PORT port of chat
   -m MESSAGE, --message MESSAGE message to send
+  -t TOKEN, --token TOKEN token of registered user
 
 
 ### References
