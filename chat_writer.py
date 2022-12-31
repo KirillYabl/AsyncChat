@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 from dataclasses import dataclass
+import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -27,13 +28,21 @@ def make_msg(text: str, is_end: bool = False) -> bytes:
 async def write_to_chat(options: Options) -> None:
     reader, writer = await asyncio.open_connection(options.host, options.port)
 
-    data = await reader.read(10000)
+    data = await reader.readline()
     logger.debug(f'RECEIVE: {data.decode().strip()}')
 
     writer.write(make_msg(options.token))
     await writer.drain()
 
-    data = await reader.read(10000)
+    data = await reader.readline()
+    logger.debug(f'RECEIVE: {data.decode().strip()}')
+
+    if json.loads(data.decode().strip()) is None:
+        logger.error(f'Wrong token {options.token}')
+        writer.close()
+        return
+
+    data = await reader.readline()
     logger.debug(f'RECEIVE: {data.decode().strip()}')
 
     writer.write(make_msg(options.message, True))
