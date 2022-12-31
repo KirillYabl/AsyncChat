@@ -32,7 +32,7 @@ if __name__ == '__main__':
         description='Script for chat listening and write in file',
     )
 
-    parser.add_argument('-host', type=str, required=True, help='host of chat')
+    parser.add_argument('-host', '--host', type=str, required=True, help='host of chat')
     parser.add_argument('-p', '--port', type=int, required=True, help='port of chat')
     parser.add_argument('-hp', '--history_path',
                         type=Path, required=True, help='path to file with messages')

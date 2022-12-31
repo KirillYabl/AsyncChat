@@ -18,7 +18,7 @@ python chat_listener.py -host HOST -p PORT -hp HISTORY_PATH
 ```
 
 Параметры:
-  -host HOST host of chat
+  -host HOST, --host HOST host of chat
   -p PORT, --port PORT port of chat
   -hp HISTORY_PATH, --history_path HISTORY_PATH
 
@@ -29,7 +29,7 @@ python chat_writer.py -host HOST -p PORT -m MESSAGE
 ```
 
 Параметры:
-  -host HOST host of chat
+  -host HOST, --host HOST host of chat
   -p PORT, --port PORT port of chat
   -m MESSAGE, --message MESSAGE message to send
 

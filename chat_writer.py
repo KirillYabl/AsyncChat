@@ -38,7 +38,7 @@ if __name__ == '__main__':
         description='Script for write to chat message',
     )
 
-    parser.add_argument('-host', type=str, required=True, help='host of chat')
+    parser.add_argument('-host', '--host', type=str, required=True, help='host of chat')
     parser.add_argument('-p', '--port', type=int, required=True, help='port of chat')
     parser.add_argument('-m', '--message', type=str, required=True, help='message to send')
 
