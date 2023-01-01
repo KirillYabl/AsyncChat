@@ -22,16 +22,6 @@ class Options:
     logging: bool
 
 
-def make_msg(text: str, is_end: bool = False) -> bytes:
-    """Make suitable for sending message: add newlines and convert to bytes"""
-    logger.debug(f'SEND: {text}')
-    text = f'{text}\n'
-    if is_end:
-        # double \n, first for end line and second empty line for end message
-        text += '\n'
-    return text.encode()
-
-
 async def register(options: Options) -> dict[str, str]:
     logger.info(f'registration...')
     reader, writer = await asyncio.open_connection(options.host, options.port)
@@ -41,14 +31,18 @@ async def register(options: Options) -> dict[str, str]:
     logger.debug(f'RECEIVE: {data.decode().strip()}')
 
     # send null for registration
-    writer.write(make_msg('\n'))
+    text = '\n'.encode()
+    logger.debug(f'SEND: {text}')
+    writer.write(text)
     await writer.drain()
 
     # get instruction message
     data = await reader.readline()
     logger.debug(f'RECEIVE: {data.decode().strip()}')
 
-    writer.write(make_msg(options.username))
+    text = f'{options.username}\n'.encode()
+    logger.debug(f'SEND: {text}')
+    writer.write(text)
     await writer.drain()
 
     # get message with credentials
@@ -78,14 +72,19 @@ async def submit_message(options: Options) -> None:
     data = await reader.readline()
     logger.debug(f'RECEIVE: {data.decode().strip()}')
 
-    writer.write(make_msg(options.token))
+    text = f'{options.token}\n'.encode()
+    logger.debug(f'SEND: {text}')
+    writer.write(text)
     await writer.drain()
 
     # get message with success authorization info
     data = await reader.readline()
     logger.debug(f'RECEIVE: {data.decode().strip()}')
 
-    writer.write(make_msg(options.message, True))
+    # double \n because chat require empty string for message sending
+    text = f'{options.message}\n\n'.encode()
+    logger.debug(f'SEND: {text}')
+    writer.write(text)
     await writer.drain()
 
     writer.close()
@@ -119,7 +118,9 @@ async def authorize(options: Options) -> bool:
         if not creds_found:
             return False
 
-    writer.write(make_msg(options.token))
+    text = f'{options.token}\n'.encode()
+    logger.debug(f'SEND: {text}')
+    writer.write(text)
     await writer.drain()
 
     # get message with credentials
