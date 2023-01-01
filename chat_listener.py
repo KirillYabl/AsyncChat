@@ -15,6 +15,7 @@ class Options:
     host: str
     port: int
     history_path: Path
+    logging: bool
 
 
 async def echo_chat(options: Options) -> None:
@@ -40,9 +41,13 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--port', type=int, required=True, help='port of chat')
     parser.add_argument('-hp', '--history_path',
                         type=Path, required=True, help='path to file with messages')
+    parser.add_argument('-l', '--logging', action='store_true', default=False, help='is do logging')
 
     args = parser.parse_args()
 
     options = Options(**args.__dict__)
+
+    if not options.logging:
+        logging.disable()
 
     asyncio.run(echo_chat(options))
