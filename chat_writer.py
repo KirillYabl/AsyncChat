@@ -41,7 +41,7 @@ async def register(options: Options) -> dict[str, str]:
     logger.debug(f'RECEIVE: {data.decode().strip()}')
 
     # send null for registration
-    writer.write(make_msg('', is_end=True))
+    writer.write(make_msg('\n'))
     await writer.drain()
 
     # get instruction message
