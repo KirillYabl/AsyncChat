@@ -7,6 +7,8 @@ from pathlib import Path
 
 import aiofiles
 
+from context_managers import open_connection
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,9 +21,10 @@ class Options:
 
 
 async def echo_chat(options: Options) -> None:
-    reader, writer = await asyncio.open_connection(options.host, options.port)
-
-    async with aiofiles.open(options.history_path, 'a', encoding='UTF8') as f:
+    async with (
+        open_connection(options.host, options.port) as (reader, writer),
+        aiofiles.open(options.history_path, 'a', encoding='UTF8') as f
+    ):
         while not reader.at_eof():
             data = await reader.readline()
             formatted_now = datetime.datetime.now().strftime('%d.%m.%y %H:%M')
