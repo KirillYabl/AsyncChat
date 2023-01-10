@@ -26,9 +26,9 @@ async def echo_chat(options: Options) -> None:
         aiofiles.open(options.history_path, 'a', encoding='UTF8') as f
     ):
         while not reader.at_eof():
-            data = await reader.readline()
+            message = await reader.readline()
             formatted_now = datetime.datetime.now().strftime('%d.%m.%y %H:%M')
-            message = f'[{formatted_now}] {data.decode()}'
+            message = f'[{formatted_now}] {message.decode()}'
             logger.debug(f'RECEIVE: {message.strip()}')
             await f.write(message)
 

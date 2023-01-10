@@ -27,9 +27,8 @@ class Options:
 async def register(options: Options) -> dict[str, str]:
     logger.info(f'registration...')
     async with open_connection(options.host, options.port) as (reader, writer):
-        # get greetings message
-        data = await reader.readline()
-        logger.debug(f'RECEIVE: {data.decode().strip()}')
+        greeting_msg = await reader.readline()
+        logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
 
         # send null for registration
         text = '\n'.encode()
@@ -37,20 +36,18 @@ async def register(options: Options) -> dict[str, str]:
         writer.write(text)
         await writer.drain()
 
-        # get instruction message
-        data = await reader.readline()
-        logger.debug(f'RECEIVE: {data.decode().strip()}')
+        instruction_msg = await reader.readline()
+        logger.debug(f'RECEIVE: {instruction_msg.decode().strip()}')
 
         text = f'{options.username}\n'.encode()
         logger.debug(f'SEND: {text}')
         writer.write(text)
         await writer.drain()
 
-        # get message with credentials
-        data = await reader.readline()
-        logger.debug(f'RECEIVE: {data.decode().strip()}')
+        credentials_msg = await reader.readline()
+        logger.debug(f'RECEIVE: {credentials_msg.decode().strip()}')
 
-        credentials = json.loads(data.decode().strip())
+        credentials = json.loads(credentials_msg.decode().strip())
 
     async with aiofiles.open(options.credential_path, 'a', encoding='UTF8') as f:
         await f.write(json.dumps(credentials) + '\n')
@@ -66,18 +63,16 @@ async def submit_message(options: Options) -> None:
     """
     logger.info(f'submit message...')
     async with open_connection(options.host, options.port) as (reader, writer):
-        # get greetings message
-        data = await reader.readline()
-        logger.debug(f'RECEIVE: {data.decode().strip()}')
+        greeting_msg = await reader.readline()
+        logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
 
         text = f'{options.token}\n'.encode()
         logger.debug(f'SEND: {text}')
         writer.write(text)
         await writer.drain()
 
-        # get message with success authorization info
-        data = await reader.readline()
-        logger.debug(f'RECEIVE: {data.decode().strip()}')
+        authorization_msg = await reader.readline()
+        logger.debug(f'RECEIVE: {authorization_msg.decode().strip()}')
 
         # double \n because chat require empty string for message sending
         text = f'{options.message}\n\n'.encode()
@@ -96,9 +91,8 @@ async def authorize(options: Options) -> bool:
     logger.info(f'authorization...')
     async with open_connection(options.host, options.port) as (reader, writer):
 
-        # get greetings message
-        data = await reader.readline()
-        logger.debug(f'RECEIVE: {data.decode().strip()}')
+        greeting_msg = await reader.readline()
+        logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
 
         # token more prior than username
         if options.username and not options.token:
@@ -120,11 +114,10 @@ async def authorize(options: Options) -> bool:
         writer.write(text)
         await writer.drain()
 
-        # get message with credentials
-        data = await reader.readline()
-        logger.debug(f'RECEIVE: {data.decode().strip()}')
+        credentials_msg = await reader.readline()
+        logger.debug(f'RECEIVE: {credentials_msg.decode().strip()}')
 
-        if json.loads(data.decode().strip()) is None:
+        if json.loads(credentials_msg.decode().strip()) is None:
             logger.error(f'Wrong token {options.token}')
             return False
 
