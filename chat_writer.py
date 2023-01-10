@@ -109,7 +109,7 @@ async def authorize(options: Options) -> bool:
         credentials_msg = await reader.readline()
         logger.debug(f'RECEIVE: {credentials_msg.decode().strip()}')
 
-        if json.loads(credentials_msg.decode().strip()) is None:
+        if json.loads(credentials_msg.decode().strip()):
             logger.error(f'Wrong token {options.token}')
             return False
 
