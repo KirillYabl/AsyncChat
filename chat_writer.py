@@ -117,19 +117,7 @@ async def authorize(options: Options) -> bool:
     return True
 
 
-async def main(options: Options) -> None:
-    is_authorized = await authorize(options)
-    if not is_authorized and not options.token:
-        credentials = await register(options)
-        options.token = credentials['account_hash']
-    elif not is_authorized:
-        return
-
-    # now we have token from args if success authorization or from registration
-    await submit_message(options)
-
-
-if __name__ == '__main__':
+async def main() -> None:
     logging.basicConfig(level=logging.DEBUG)
     parser = argparse.ArgumentParser(
         prog='Async chat writer',
@@ -152,8 +140,21 @@ if __name__ == '__main__':
     if not options.logging:
         logging.disable()
 
+    is_authorized = await authorize(options)
+    if not is_authorized and not options.token:
+        credentials = await register(options)
+        options.token = credentials['account_hash']
+    elif not is_authorized:
+        return
+
+    # now we have token from args if success authorization or from registration
+    await submit_message(options)
+
+
+if __name__ == '__main__':
+
     if platform.system() == 'Windows':
         # without this it will always RuntimeError in the end of function
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-    asyncio.run(main(options))
+    asyncio.run(main())
