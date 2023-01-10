@@ -140,11 +140,11 @@ async def main() -> None:
     if not options.logging:
         logging.disable()
 
-    is_authorized = await authorize(options)
-    if not is_authorized and not options.token:
+    is_authorize = await authorize(options)
+    if not is_authorize and not options.token:
         credentials = await register(options)
         options.token = credentials['account_hash']
-    elif not is_authorized:
+    elif not is_authorize:
         return
 
     # now we have token from args if success authorization or from registration
