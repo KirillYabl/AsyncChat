@@ -24,6 +24,13 @@ class Options:
     logging: bool
 
 
+async def write_message(writer: asyncio.StreamWriter, text: str) -> None:
+    text = text.encode()
+    logger.debug(f'SEND: {text}')
+    writer.write(text)
+    await writer.drain()
+
+
 async def register(options: Options) -> dict[str, str]:
     logger.info(f'registration...')
     async with open_connection(options.host, options.port) as (reader, writer):
@@ -31,18 +38,12 @@ async def register(options: Options) -> dict[str, str]:
         logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
 
         # send null for registration
-        text = '\n'.encode()
-        logger.debug(f'SEND: {text}')
-        writer.write(text)
-        await writer.drain()
+        await write_message(writer, '\n')
 
         instruction_msg = await reader.readline()
         logger.debug(f'RECEIVE: {instruction_msg.decode().strip()}')
 
-        text = f'{options.username}\n'.encode()
-        logger.debug(f'SEND: {text}')
-        writer.write(text)
-        await writer.drain()
+        await write_message(writer, f'{options.username}\n')
 
         credentials_msg = await reader.readline()
         logger.debug(f'RECEIVE: {credentials_msg.decode().strip()}')
@@ -66,19 +67,13 @@ async def submit_message(options: Options) -> None:
         greeting_msg = await reader.readline()
         logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
 
-        text = f'{options.token}\n'.encode()
-        logger.debug(f'SEND: {text}')
-        writer.write(text)
-        await writer.drain()
+        await write_message(writer, f'{options.token}\n')
 
         authorization_msg = await reader.readline()
         logger.debug(f'RECEIVE: {authorization_msg.decode().strip()}')
 
         # double \n because chat require empty string for message sending
-        text = f'{options.message}\n\n'.encode()
-        logger.debug(f'SEND: {text}')
-        writer.write(text)
-        await writer.drain()
+        await write_message(writer, f'{options.message}\n\n')
 
         logger.info(f'message submitted')
 
@@ -109,10 +104,7 @@ async def authorize(options: Options) -> bool:
             if not creds_found:
                 return False
 
-        text = f'{options.token}\n'.encode()
-        logger.debug(f'SEND: {text}')
-        writer.write(text)
-        await writer.drain()
+        await write_message(writer, f'{options.token}\n')
 
         credentials_msg = await reader.readline()
         logger.debug(f'RECEIVE: {credentials_msg.decode().strip()}')
