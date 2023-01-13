@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass
 import logging
 from pathlib import Path
+from tkinter import messagebox
 
 import aiofiles
 
@@ -107,9 +108,8 @@ class Options:
     token: str
 
 
-if __name__ == '__main__':
+async def main():
     logging.basicConfig(level=logging.DEBUG)
-    loop = asyncio.get_event_loop()
     parser = argparse.ArgumentParser(
         prog='Async chat listener',
         description='Script for chat listening and write in file',
@@ -132,12 +132,18 @@ if __name__ == '__main__':
     status_updates_queue = asyncio.Queue()
     messages_to_file_queue = asyncio.Queue()
 
-    is_authorize = authorize_in_chat_by_token(options.write_host, options.write_port, options.token)
+    is_authorize = await authorize_in_chat_by_token(options.write_host, options.write_port, options.token)
+    if not is_authorize:
+        messagebox.showinfo("Неверный токен", "Проверьте токен, сервер его не узнал")
+    else:
+        await asyncio.gather(
+            read_msgs(options.listen_host, options.listen_port, options.history_path, messages_queue,
+                      messages_to_file_queue),
+            save_msgs(options.history_path, messages_to_file_queue),
+            send_msgs(options.write_host, options.write_port, options.token, sending_queue),
+            gui.draw(messages_queue, sending_queue, status_updates_queue)
+        )
 
-    loop.run_until_complete(asyncio.gather(
-        read_msgs(options.listen_host, options.listen_port, options.history_path, messages_queue,
-                  messages_to_file_queue),
-        save_msgs(options.history_path, messages_to_file_queue),
-        send_msgs(options.write_host, options.write_port, options.token, sending_queue),
-        gui.draw(messages_queue, sending_queue, status_updates_queue)
-    ))
+
+if __name__ == '__main__':
+    asyncio.run(main())
