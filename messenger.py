@@ -16,41 +16,53 @@ from context_managers import open_connection, open_connection_queue
 logger = logging.getLogger(__name__)
 
 
-async def read_msgs(host: str, port: int, filepath: Path,
-                    messages_queue: asyncio.Queue, messages_to_file_queue: asyncio.Queue,
-                    status_updates_queue: asyncio.Queue) -> None:
-    # read history of chat
-    async with aiofiles.open(filepath, 'r', encoding='UTF8') as f:
-        async for message in f:
-            messages_queue.put_nowait(message.strip())
+class Messenger:
+    def __init__(self, *, messages_queue: asyncio.Queue, sending_queue: asyncio.Queue,
+                 status_updates_queue: asyncio.Queue, listen_host: str, listen_port: int,
+                 history_path: Path, write_host: str, write_port: int, token: str):
+        self.listen_host = listen_host
+        self.listen_port = listen_port
+        self.history_path = history_path
+        self.write_host = write_host
+        self.write_port = write_port
+        self.token = token
 
-    status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
-    # read live messages
-    async with open_connection_queue(host, port, status_updates_queue,
-                                     gui.ReadConnectionStateChanged.CLOSED) as (reader, writer):
-        status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.ESTABLISHED)
-        while not reader.at_eof():
-            message = await reader.readline()
-            message = message.decode().strip()
-            logger.debug(f'RECEIVE: {message}')
-            messages_queue.put_nowait(message)
-            messages_to_file_queue.put_nowait(message)
+        self.messages_queue = messages_queue
+        self.sending_queue = sending_queue
+        self.status_updates_queue = status_updates_queue
+        self.messages_to_file_queue = asyncio.Queue()
 
+    async def read_msgs(self) -> None:
+        # read history of chat
+        async with aiofiles.open(self.history_path, 'r', encoding='UTF8') as f:
+            async for message in f:
+                self.messages_queue.put_nowait(message.strip())
 
-async def save_msgs(filepath: Path, queue: asyncio.Queue) -> None:
-    async with aiofiles.open(filepath, 'a', encoding='UTF8') as f:
+        self.status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
+        # read live messages
+        async with open_connection_queue(self.listen_host, self.listen_port, self.status_updates_queue,
+                                         gui.ReadConnectionStateChanged.CLOSED) as (reader, writer):
+            self.status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.ESTABLISHED)
+            while not reader.at_eof():
+                message = await reader.readline()
+                message = message.decode().strip()
+                logger.debug(f'RECEIVE: {message}')
+                self.messages_queue.put_nowait(message)
+                self.messages_to_file_queue.put_nowait(message)
+
+    async def save_msgs(self) -> None:
+        async with aiofiles.open(self.history_path, 'a', encoding='UTF8') as f:
+            while True:
+                message = await self.messages_to_file_queue.get()
+                formatted_now = datetime.datetime.now().strftime('%d.%m.%y %H:%M')
+                message = f'[{formatted_now}] {message}\n'
+                await f.write(message)
+
+    async def send_msgs(self) -> None:
         while True:
-            message = await queue.get()
-            formatted_now = datetime.datetime.now().strftime('%d.%m.%y %H:%M')
-            message = f'[{formatted_now}] {message}\n'
-            await f.write(message)
-
-
-async def send_msgs(host: str, port: int, token: str, queue: asyncio.Queue,
-                    status_updates_queue: asyncio.Queue) -> None:
-    while True:
-        message = await queue.get()
-        await submit_message(host, port, token, message, status_updates_queue)
+            message = await self.sending_queue.get()
+            await submit_message(self.write_host, self.write_port,
+                                 self.token, message, self.status_updates_queue)
 
 
 async def write_message_in_stream(writer: asyncio.StreamWriter, text: str) -> None:
@@ -142,18 +154,18 @@ async def main():
     messages_queue = asyncio.Queue()
     sending_queue = asyncio.Queue()
     status_updates_queue = asyncio.Queue()
-    messages_to_file_queue = asyncio.Queue()
 
     is_authorize, creds = await authorize_in_chat_by_token(options.write_host, options.write_port, options.token)
+    messenger = Messenger(messages_queue=messages_queue, sending_queue=sending_queue,
+                          status_updates_queue=status_updates_queue, **options.__dict__)
     if not is_authorize:
         messagebox.showinfo("Неверный токен", "Проверьте токен, сервер его не узнал")
     else:
         status_updates_queue.put_nowait(gui.NicknameReceived(creds['nickname']))
         await asyncio.gather(
-            read_msgs(options.listen_host, options.listen_port, options.history_path, messages_queue,
-                      messages_to_file_queue, status_updates_queue),
-            save_msgs(options.history_path, messages_to_file_queue),
-            send_msgs(options.write_host, options.write_port, options.token, sending_queue, status_updates_queue),
+            messenger.read_msgs(),
+            messenger.save_msgs(),
+            messenger.send_msgs(),
             gui.draw(messages_queue, sending_queue, status_updates_queue)
         )
 
