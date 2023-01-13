@@ -10,6 +10,8 @@ from tkinter import messagebox
 from typing import Any
 
 import aiofiles
+from _socket import gaierror
+from anyio import create_task_group, run
 from async_timeout import timeout
 
 import gui
@@ -17,8 +19,7 @@ from context_managers import open_connection, open_connection_queue
 
 
 class Messenger:
-    def __init__(self, *, messages_queue: asyncio.Queue, sending_queue: asyncio.Queue,
-                 status_updates_queue: asyncio.Queue, listen_host: str, listen_port: int,
+    def __init__(self, *, messages_queue: asyncio.Queue, sending_queue: asyncio.Queue, status_updates_queue: asyncio.Queue, listen_host: str, listen_port: int,
                  history_path: Path, write_host: str, write_port: int, token: str):
         self.listen_host = listen_host
         self.listen_port = listen_port
@@ -39,14 +40,15 @@ class Messenger:
         self.messages_to_file_queue = asyncio.Queue()
         self.watchdog_queue = asyncio.Queue()
 
-    async def read_msgs(self) -> None:
-        # read history of chat
-        async with aiofiles.open(self.history_path, 'r', encoding='UTF8') as f:
-            async for message in f:
+        self.read_history_messages()
+
+    def read_history_messages(self) -> None:
+        with open(self.history_path, 'r', encoding='UTF8') as f:
+            for message in f:
                 self.messages_queue.put_nowait(message.strip())
 
+    async def read_msgs(self) -> None:
         self.status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
-        # read live messages
         async with open_connection_queue(self.listen_host, self.listen_port, self.status_updates_queue,
                                          gui.ReadConnectionStateChanged.CLOSED) as (reader, writer):
             self.status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.ESTABLISHED)
@@ -94,7 +96,7 @@ class Messenger:
         writer.write(text)
         await writer.drain()
 
-    async def authorize_in_chat_by_token(self) -> tuple[bool, dict[str, Any]]:
+    async def authorize_in_chat_by_token(self) -> bool:
         """
         Authorization by token from args
         Return bool value of authorization result
@@ -113,10 +115,12 @@ class Messenger:
 
             if not creds:
                 self.logger.error(f'Wrong token {self.token}')
-                return False, {}
+                messagebox.showinfo("Неверный токен", "Проверьте токен, сервер его не узнал")
+                return False
 
+        self.status_updates_queue.put_nowait(gui.NicknameReceived(creds['nickname']))
         self.logger.info(f'success authorization')
-        return True, creds
+        return True
 
     async def watch_for_connection(self) -> None:
         timeout_seconds = 10
@@ -127,6 +131,19 @@ class Messenger:
                     self.watchdog_logger.debug(f'Connection is alive. {message}')
             except TimeoutError:
                 self.watchdog_logger.warning(f'{timeout_seconds}s timeout is elapsed')
+                raise ConnectionError
+
+    async def handle_connection(self) -> None:
+        while True:
+            try:
+                async with create_task_group() as tg:
+                    tg.start_soon(self.authorize_in_chat_by_token)
+                    tg.start_soon(self.read_msgs)
+                    tg.start_soon(self.save_msgs)
+                    tg.start_soon(self.send_msgs)
+                    tg.start_soon(self.watch_for_connection)
+            except BaseException:
+                self.watchdog_logger.warning('Connection error happened')
 
 
 @dataclass
@@ -157,26 +174,16 @@ async def main():
     args = parser.parse_args()
 
     options = Options(**args.__dict__)
-
     messages_queue = asyncio.Queue()
     sending_queue = asyncio.Queue()
     status_updates_queue = asyncio.Queue()
 
-    messenger = Messenger(messages_queue=messages_queue, sending_queue=sending_queue,
-                          status_updates_queue=status_updates_queue, **options.__dict__)
-    is_authorize, creds = await messenger.authorize_in_chat_by_token()
-    if not is_authorize:
-        messagebox.showinfo("Неверный токен", "Проверьте токен, сервер его не узнал")
-    else:
-        status_updates_queue.put_nowait(gui.NicknameReceived(creds['nickname']))
-        await asyncio.gather(
-            messenger.read_msgs(),
-            messenger.save_msgs(),
-            messenger.send_msgs(),
-            messenger.watch_for_connection(),
-            gui.draw(messages_queue, sending_queue, status_updates_queue)
-        )
+    messenger = Messenger(messages_queue=messages_queue, sending_queue=sending_queue, status_updates_queue=status_updates_queue, **options.__dict__)
+    await asyncio.gather(
+        gui.draw(messages_queue, sending_queue, status_updates_queue),
+        messenger.handle_connection(),
+    )
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    run(main)
