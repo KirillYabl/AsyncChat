@@ -68,10 +68,25 @@ class Messenger:
                 await f.write(message)
 
     async def send_msgs(self) -> None:
-        while True:
-            message = await self.sending_queue.get()
-            await self.submit_message(message)
-            self.watchdog_queue.put_nowait('Message sent')
+        self.status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
+        async with open_connection_queue(self.write_host, self.write_port, self.status_updates_queue,
+                                         gui.SendingConnectionStateChanged.CLOSED) as (reader, writer):
+            self.status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
+            greeting_msg = await reader.readline()
+            self.logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
+
+            await self.write_message_in_stream(writer, f'{self.token}\n')
+
+            authorization_msg = await reader.readline()
+            self.logger.debug(f'RECEIVE: {authorization_msg.decode().strip()}')
+
+            while True:
+                message = await self.sending_queue.get()
+                # double \n because chat require empty string for message sending
+                await self.write_message_in_stream(writer, f'{message}\n\n')
+
+                self.logger.info(f'message submitted')
+                self.watchdog_queue.put_nowait('Message sent')
 
     async def write_message_in_stream(self, writer: asyncio.StreamWriter, text: str) -> None:
         text = text.encode()
@@ -102,29 +117,6 @@ class Messenger:
 
         self.logger.info(f'success authorization')
         return True, creds
-
-    async def submit_message(self, message: str) -> None:
-        """
-        Submit message in chat.
-        In this function token always in options and always valid
-        """
-        self.logger.info(f'submit message...')
-        self.status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
-        async with open_connection_queue(self.write_host, self.write_port, self.status_updates_queue,
-                                         gui.SendingConnectionStateChanged.CLOSED) as (reader, writer):
-            self.status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
-            greeting_msg = await reader.readline()
-            self.logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
-
-            await self.write_message_in_stream(writer, f'{self.token}\n')
-
-            authorization_msg = await reader.readline()
-            self.logger.debug(f'RECEIVE: {authorization_msg.decode().strip()}')
-
-            # double \n because chat require empty string for message sending
-            await self.write_message_in_stream(writer, f'{message}\n\n')
-
-            self.logger.info(f'message submitted')
 
     async def watch_for_connection(self) -> None:
         timeout_seconds = 10
