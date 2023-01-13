@@ -1,4 +1,5 @@
 import asyncio
+from asyncio.exceptions import TimeoutError
 import argparse
 import datetime
 import json
@@ -9,11 +10,10 @@ from tkinter import messagebox
 from typing import Any
 
 import aiofiles
+from async_timeout import timeout
 
 import gui
 from context_managers import open_connection, open_connection_queue
-
-logger = logging.getLogger(__name__)
 
 
 class Messenger:
@@ -26,11 +26,18 @@ class Messenger:
         self.write_host = write_host
         self.write_port = write_port
         self.token = token
+        self.logger = logging.getLogger('messenger')
+        self.watchdog_logger = logging.getLogger('watchdog')
+        ch = logging.StreamHandler()
+        formatter = logging.Formatter('[%(created)i] %(message)s')
+        ch.setFormatter(formatter)
+        self.watchdog_logger.addHandler(ch)
 
         self.messages_queue = messages_queue
         self.sending_queue = sending_queue
         self.status_updates_queue = status_updates_queue
         self.messages_to_file_queue = asyncio.Queue()
+        self.watchdog_queue = asyncio.Queue()
 
     async def read_msgs(self) -> None:
         # read history of chat
@@ -43,12 +50,14 @@ class Messenger:
         async with open_connection_queue(self.listen_host, self.listen_port, self.status_updates_queue,
                                          gui.ReadConnectionStateChanged.CLOSED) as (reader, writer):
             self.status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.ESTABLISHED)
+            self.watchdog_queue.put_nowait('Connection established')
             while not reader.at_eof():
                 message = await reader.readline()
                 message = message.decode().strip()
-                logger.debug(f'RECEIVE: {message}')
+                self.logger.debug(f'RECEIVE: {message}')
                 self.messages_queue.put_nowait(message)
                 self.messages_to_file_queue.put_nowait(message)
+                self.watchdog_queue.put_nowait('New message in chat')
 
     async def save_msgs(self) -> None:
         async with aiofiles.open(self.history_path, 'a', encoding='UTF8') as f:
@@ -61,65 +70,71 @@ class Messenger:
     async def send_msgs(self) -> None:
         while True:
             message = await self.sending_queue.get()
-            await submit_message(self.write_host, self.write_port,
-                                 self.token, message, self.status_updates_queue)
+            await self.submit_message(message)
+            self.watchdog_queue.put_nowait('Message sent')
 
+    async def write_message_in_stream(self, writer: asyncio.StreamWriter, text: str) -> None:
+        text = text.encode()
+        self.logger.debug(f'SEND: {text}')
+        writer.write(text)
+        await writer.drain()
 
-async def write_message_in_stream(writer: asyncio.StreamWriter, text: str) -> None:
-    text = text.encode()
-    logger.debug(f'SEND: {text}')
-    writer.write(text)
-    await writer.drain()
+    async def authorize_in_chat_by_token(self) -> tuple[bool, dict[str, Any]]:
+        """
+        Authorization by token from args
+        Return bool value of authorization result
+        """
+        self.logger.info(f'authorization...')
+        async with open_connection(self.write_host, self.write_port) as (reader, writer):
+            greeting_msg = await reader.readline()
+            self.logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
 
+            await self.write_message_in_stream(writer, f'{self.token}\n')
 
-async def authorize_in_chat_by_token(host: str, port: int, token: str) -> tuple[bool, dict[str, Any]]:
-    """
-    Authorization by token from args
-    Return bool value of authorization result
-    """
-    logger.info(f'authorization...')
-    async with open_connection(host, port) as (reader, writer):
-        greeting_msg = await reader.readline()
-        logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
+            credentials_msg = await reader.readline()
+            self.logger.debug(f'RECEIVE: {credentials_msg.decode().strip()}')
 
-        await write_message_in_stream(writer, f'{token}\n')
+            creds = json.loads(credentials_msg.decode().strip())
 
-        credentials_msg = await reader.readline()
-        logger.debug(f'RECEIVE: {credentials_msg.decode().strip()}')
+            if not creds:
+                self.logger.error(f'Wrong token {self.token}')
+                return False, {}
 
-        creds = json.loads(credentials_msg.decode().strip())
+        self.logger.info(f'success authorization')
+        return True, creds
 
-        if not creds:
-            logger.error(f'Wrong token {token}')
-            return False, {}
+    async def submit_message(self, message: str) -> None:
+        """
+        Submit message in chat.
+        In this function token always in options and always valid
+        """
+        self.logger.info(f'submit message...')
+        self.status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
+        async with open_connection_queue(self.write_host, self.write_port, self.status_updates_queue,
+                                         gui.SendingConnectionStateChanged.CLOSED) as (reader, writer):
+            self.status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
+            greeting_msg = await reader.readline()
+            self.logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
 
-    logger.info(f'success authorization')
-    return True, creds
+            await self.write_message_in_stream(writer, f'{self.token}\n')
 
+            authorization_msg = await reader.readline()
+            self.logger.debug(f'RECEIVE: {authorization_msg.decode().strip()}')
 
-async def submit_message(host: str, port: int, token: str, message: str,
-                         status_updates_queue: asyncio.Queue) -> None:
-    """
-    Submit message in chat.
-    In this function token always in options and always valid
-    """
-    logger.info(f'submit message...')
-    status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
-    async with open_connection_queue(host, port, status_updates_queue,
-                                     gui.SendingConnectionStateChanged.CLOSED) as (reader, writer):
-        status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
-        greeting_msg = await reader.readline()
-        logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
+            # double \n because chat require empty string for message sending
+            await self.write_message_in_stream(writer, f'{message}\n\n')
 
-        await write_message_in_stream(writer, f'{token}\n')
+            self.logger.info(f'message submitted')
 
-        authorization_msg = await reader.readline()
-        logger.debug(f'RECEIVE: {authorization_msg.decode().strip()}')
-
-        # double \n because chat require empty string for message sending
-        await write_message_in_stream(writer, f'{message}\n\n')
-
-        logger.info(f'message submitted')
+    async def watch_for_connection(self) -> None:
+        timeout_seconds = 10
+        while True:
+            try:
+                async with timeout(timeout_seconds) as cm:
+                    message = await self.watchdog_queue.get()
+                    self.watchdog_logger.debug(f'Connection is alive. {message}')
+            except TimeoutError:
+                self.watchdog_logger.warning(f'{timeout_seconds}s timeout is elapsed')
 
 
 @dataclass
@@ -155,9 +170,9 @@ async def main():
     sending_queue = asyncio.Queue()
     status_updates_queue = asyncio.Queue()
 
-    is_authorize, creds = await authorize_in_chat_by_token(options.write_host, options.write_port, options.token)
     messenger = Messenger(messages_queue=messages_queue, sending_queue=sending_queue,
                           status_updates_queue=status_updates_queue, **options.__dict__)
+    is_authorize, creds = await messenger.authorize_in_chat_by_token()
     if not is_authorize:
         messagebox.showinfo("Неверный токен", "Проверьте токен, сервер его не узнал")
     else:
@@ -166,6 +181,7 @@ async def main():
             messenger.read_msgs(),
             messenger.save_msgs(),
             messenger.send_msgs(),
+            messenger.watch_for_connection(),
             gui.draw(messages_queue, sending_queue, status_updates_queue)
         )
 
