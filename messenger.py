@@ -10,6 +10,7 @@ from tkinter import messagebox
 from typing import Any
 
 import aiofiles
+import anyio
 from _socket import gaierror
 from anyio import create_task_group, run
 from async_timeout import timeout
@@ -126,14 +127,18 @@ class Messenger:
         timeout_seconds = 10
         while True:
             try:
+                send_empty_message_every_seconds = 5
                 async with timeout(timeout_seconds) as cm:
                     message = await self.watchdog_queue.get()
                     self.watchdog_logger.debug(f'Connection is alive. {message}')
+                    self.sending_queue.put_nowait('')
+                    await anyio.sleep(send_empty_message_every_seconds)
             except TimeoutError:
                 self.watchdog_logger.warning(f'{timeout_seconds}s timeout is elapsed')
                 raise ConnectionError
 
     async def handle_connection(self) -> None:
+        try_reconnect_every_seconds = 1
         while True:
             try:
                 async with create_task_group() as tg:
@@ -144,6 +149,7 @@ class Messenger:
                     tg.start_soon(self.watch_for_connection)
             except BaseException:
                 self.watchdog_logger.warning('Connection error happened')
+                await anyio.sleep(try_reconnect_every_seconds)
 
 
 @dataclass
