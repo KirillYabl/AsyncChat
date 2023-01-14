@@ -8,9 +8,8 @@ import logging
 from pathlib import Path
 from tkinter import messagebox, TclError
 
-import aiofiles
 import anyio
-from anyio import create_task_group, run
+import aiofiles
 from async_timeout import timeout
 
 import messenger_gui as gui
@@ -18,7 +17,8 @@ from context_managers import open_connection, open_connection_queue
 
 
 class Messenger:
-    def __init__(self, *, messages_queue: asyncio.Queue, sending_queue: asyncio.Queue, status_updates_queue: asyncio.Queue, listen_host: str, listen_port: int,
+    def __init__(self, *, messages_queue: asyncio.Queue, sending_queue: asyncio.Queue,
+                 status_updates_queue: asyncio.Queue, listen_host: str, listen_port: int,
                  history_path: Path, write_host: str, write_port: int, token: str):
         self.listen_host = listen_host
         self.listen_port = listen_port
@@ -39,9 +39,10 @@ class Messenger:
         self.messages_to_file_queue = asyncio.Queue()
         self.watchdog_queue = asyncio.Queue()
 
-        self.read_history_messages()
+        self._read_history_messages()
 
-    def read_history_messages(self) -> None:
+    def _read_history_messages(self) -> None:
+        """Call only once on init to read all saved messages"""
         with open(self.history_path, 'r', encoding='UTF8') as f:
             for message in f:
                 self.messages_queue.put_nowait(message.strip())
@@ -90,6 +91,7 @@ class Messenger:
                 self.watchdog_queue.put_nowait('Message sent')
 
     async def write_message_in_stream(self, writer: asyncio.StreamWriter, text: str) -> None:
+        """Wrapper of stream message sending"""
         text = text.encode()
         self.logger.debug(f'SEND: {text}')
         writer.write(text)
@@ -136,10 +138,11 @@ class Messenger:
                 raise ConnectionError
 
     async def handle_connection(self) -> None:
+        """Function run all coruutines and try to reconnect if connection lost"""
         try_reconnect_every_seconds = 1
         while True:
             try:
-                async with create_task_group() as tg:
+                async with anyio.create_task_group() as tg:
                     tg.start_soon(self.authorize_in_chat_by_token)
                     tg.start_soon(self.read_msgs)
                     tg.start_soon(self.save_msgs)
@@ -163,8 +166,8 @@ class Options:
 async def main():
     logging.basicConfig(level=logging.DEBUG)
     parser = argparse.ArgumentParser(
-        prog='Async chat listener',
-        description='Script for chat listening and write in file',
+        prog='Async chat UI',
+        description='Asynchronous UI of chat',
     )
 
     parser.add_argument('-lh', '--listen_host', type=str, required=True, help='host of chat to listen')
@@ -182,14 +185,17 @@ async def main():
     sending_queue = asyncio.Queue()
     status_updates_queue = asyncio.Queue()
 
-    messenger = Messenger(messages_queue=messages_queue, sending_queue=sending_queue, status_updates_queue=status_updates_queue, **options.__dict__)
-    async with create_task_group() as tg:
+    messenger = Messenger(
+        messages_queue=messages_queue, sending_queue=sending_queue,
+        status_updates_queue=status_updates_queue, **options.__dict__
+    )
+    async with anyio.create_task_group() as tg:
         tg.start_soon(gui.draw, messages_queue, sending_queue, status_updates_queue)
         tg.start_soon(messenger.handle_connection)
 
 
 if __name__ == '__main__':
     try:
-        run(main)
+        anyio.run(main)
     except (KeyboardInterrupt, gui.TkAppClosed, TclError):
         pass

@@ -7,7 +7,7 @@ from tkinter import TclError
 import logging
 
 import aiofiles
-from anyio import create_task_group, run
+import anyio
 
 import registrator_gui as gui
 from context_managers import open_connection
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 async def write_message(writer: asyncio.StreamWriter, text: str) -> None:
+    """Wrapper of stream message sending"""
     text = text.encode()
     logger.debug(f'SEND: {text}')
     writer.write(text)
@@ -24,6 +25,7 @@ async def write_message(writer: asyncio.StreamWriter, text: str) -> None:
 
 async def register(host: str, port: int, credential_path: Path, sending_queue: asyncio.Queue,
                    creds_updates_queue: asyncio.Queue) -> None:
+    """Register in chat coroutine. While true loop because interface supports many registrations"""
     while True:
         logger.info(f'registration...')
         async with open_connection(host, port) as (reader, writer):
@@ -69,8 +71,8 @@ async def main():
     logging.basicConfig(level=logging.DEBUG)
 
     parser = argparse.ArgumentParser(
-        prog='Async chat listener',
-        description='Script for chat listening and write in file',
+        prog='Registration in chat UI',
+        description='UI for registration users in chat with possibility going to chat',
     )
 
     parser.add_argument('-lh', '--listen_host', type=str, required=True, help='host of chat to listen')
@@ -88,7 +90,7 @@ async def main():
 
     sending_queue = asyncio.Queue()
     creds_updates_queue = asyncio.Queue()
-    async with create_task_group() as tg:
+    async with anyio.create_task_group() as tg:
         tg.start_soon(gui.draw, sending_queue, creds_updates_queue, options)
         tg.start_soon(register, options.write_host, options.write_port, options.credential_path,
                       sending_queue, creds_updates_queue)
@@ -96,6 +98,6 @@ async def main():
 
 if __name__ == '__main__':
     try:
-        run(main)
+        anyio.run(main)
     except (KeyboardInterrupt, gui.TkAppClosed, TclError):
         pass
