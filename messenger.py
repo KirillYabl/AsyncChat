@@ -7,15 +7,13 @@ from dataclasses import dataclass
 import logging
 from pathlib import Path
 from tkinter import messagebox, TclError
-from typing import Any
 
 import aiofiles
 import anyio
-from _socket import gaierror
 from anyio import create_task_group, run
 from async_timeout import timeout
 
-import gui
+import messenger_gui as gui
 from context_managers import open_connection, open_connection_queue
 
 
