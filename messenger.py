@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 import logging
 from pathlib import Path
-from tkinter import messagebox
+from tkinter import messagebox, TclError
 from typing import Any
 
 import aiofiles
@@ -191,4 +191,7 @@ async def main():
 
 
 if __name__ == '__main__':
-    run(main)
+    try:
+        run(main)
+    except (KeyboardInterrupt, gui.TkAppClosed, TclError):
+        pass
