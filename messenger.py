@@ -185,10 +185,9 @@ async def main():
     status_updates_queue = asyncio.Queue()
 
     messenger = Messenger(messages_queue=messages_queue, sending_queue=sending_queue, status_updates_queue=status_updates_queue, **options.__dict__)
-    await asyncio.gather(
-        gui.draw(messages_queue, sending_queue, status_updates_queue),
-        messenger.handle_connection(),
-    )
+    async with create_task_group() as tg:
+        tg.start_soon(gui.draw, messages_queue, sending_queue, status_updates_queue)
+        tg.start_soon(messenger.handle_connection)
 
 
 if __name__ == '__main__':
