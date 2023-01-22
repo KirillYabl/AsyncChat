@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import logging
 from pathlib import Path
 from tkinter import messagebox, TclError
+from typing import Any
 
 import anyio
 import aiofiles
@@ -48,10 +49,14 @@ class Messenger:
                 self.messages_queue.put_nowait(message.strip())
 
     async def read_msgs(self) -> None:
-        self.status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
-        async with open_connection_queue(self.listen_host, self.listen_port, self.status_updates_queue,
-                                         gui.ReadConnectionStateChanged.CLOSED) as (reader, writer):
-            self.status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.ESTABLISHED)
+        async with open_connection_queue(
+                self.listen_host,
+                self.listen_port,
+                self.status_updates_queue,
+                gui.ReadConnectionStateChanged.INITIATED,
+                gui.ReadConnectionStateChanged.ESTABLISHED,
+                gui.ReadConnectionStateChanged.CLOSED
+        ) as (reader, writer):
             self.watchdog_queue.put_nowait('Connection established')
             while not reader.at_eof():
                 message = await reader.readline()
@@ -70,17 +75,15 @@ class Messenger:
                 await f.write(message)
 
     async def send_msgs(self) -> None:
-        self.status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
-        async with open_connection_queue(self.write_host, self.write_port, self.status_updates_queue,
-                                         gui.SendingConnectionStateChanged.CLOSED) as (reader, writer):
-            self.status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
-            greeting_msg = await reader.readline()
-            self.logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
-
-            await self.write_message_in_stream(writer, f'{self.token}\n')
-
-            authorization_msg = await reader.readline()
-            self.logger.debug(f'RECEIVE: {authorization_msg.decode().strip()}')
+        async with open_connection_queue(
+                self.write_host,
+                self.write_port,
+                self.status_updates_queue,
+                gui.SendingConnectionStateChanged.INITIATED,
+                gui.SendingConnectionStateChanged.ESTABLISHED,
+                gui.SendingConnectionStateChanged.CLOSED,
+        ) as (reader, writer):
+            await self.get_creds_after_authorization(reader, writer)
 
             while True:
                 message = await self.sending_queue.get()
@@ -97,23 +100,32 @@ class Messenger:
         writer.write(text)
         await writer.drain()
 
-    async def authorize_in_chat_by_token(self) -> bool:
+    async def get_creds_after_authorization(
+            self,
+            reader: asyncio.StreamReader,
+            writer: asyncio.StreamWriter
+    ) -> dict[str, Any]:
+        greeting_msg = await reader.readline()
+        self.logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
+
+        await self.write_message_in_stream(writer, f'{self.token}\n')
+
+        credentials_msg = await reader.readline()
+        self.logger.debug(f'RECEIVE: {credentials_msg.decode().strip()}')
+
+        creds = json.loads(credentials_msg.decode().strip())
+
+        return creds
+
+    async def check_token_for_authorization(self) -> bool:
         """
-        Authorization by token from args
+        Check in authorization if token right
 
         Return bool value of authorization result
         """
         self.logger.info('authorization...')
         async with open_connection(self.write_host, self.write_port) as (reader, writer):
-            greeting_msg = await reader.readline()
-            self.logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
-
-            await self.write_message_in_stream(writer, f'{self.token}\n')
-
-            credentials_msg = await reader.readline()
-            self.logger.debug(f'RECEIVE: {credentials_msg.decode().strip()}')
-
-            creds = json.loads(credentials_msg.decode().strip())
+            creds = await self.get_creds_after_authorization(reader, writer)
 
             if not creds:
                 self.logger.error(f'Wrong token {self.token}')
@@ -144,7 +156,7 @@ class Messenger:
         while True:
             try:
                 async with anyio.create_task_group() as tg:
-                    tg.start_soon(self.authorize_in_chat_by_token)
+                    tg.start_soon(self.check_token_for_authorization)
                     tg.start_soon(self.read_msgs)
                     tg.start_soon(self.save_msgs)
                     tg.start_soon(self.send_msgs)
