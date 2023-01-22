@@ -32,7 +32,7 @@ async def write_message(writer: asyncio.StreamWriter, text: str) -> None:
 
 
 async def register(options: Options) -> dict[str, str]:
-    logger.info(f'registration...')
+    logger.info('registration...')
     async with open_connection(options.host, options.port) as (reader, writer):
         greeting_msg = await reader.readline()
         logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
@@ -53,7 +53,7 @@ async def register(options: Options) -> dict[str, str]:
     async with aiofiles.open(options.credential_path, 'a', encoding='UTF8') as f:
         await f.write(json.dumps(credentials) + '\n')
 
-    logger.info(f'success registration')
+    logger.info('success registration')
     return credentials
 
 
@@ -62,7 +62,7 @@ async def submit_message(options: Options) -> None:
     Submit message in chat.
     In this function token always in options and always valid
     """
-    logger.info(f'submit message...')
+    logger.info('submit message...')
     async with open_connection(options.host, options.port) as (reader, writer):
         greeting_msg = await reader.readline()
         logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
@@ -75,7 +75,7 @@ async def submit_message(options: Options) -> None:
         # double \n because chat require empty string for message sending
         await write_message(writer, f'{options.message}\n\n')
 
-        logger.info(f'message submitted')
+        logger.info('message submitted')
 
 
 async def authorize(options: Options) -> bool:
@@ -83,7 +83,7 @@ async def authorize(options: Options) -> bool:
     Authorization from db data by mane or by token from args
     Return bool value of authorization result
     """
-    logger.info(f'authorization...')
+    logger.info('authorization...')
     async with open_connection(options.host, options.port) as (reader, writer):
 
         greeting_msg = await reader.readline()
@@ -113,7 +113,7 @@ async def authorize(options: Options) -> bool:
             logger.error(f'Wrong token {options.token}')
             return False
 
-    logger.info(f'success authorization')
+    logger.info('success authorization')
     return True
 
 

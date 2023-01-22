@@ -67,9 +67,9 @@ async def update_conversation_history(panel, messages_queue):
 async def update_status_panel(status_labels, status_updates_queue):
     nickname_label, read_label, write_label = status_labels
 
-    read_label['text'] = f'Чтение: нет соединения'
-    write_label['text'] = f'Отправка: нет соединения'
-    nickname_label['text'] = f'Имя пользователя: неизвестно'
+    read_label['text'] = 'Чтение: нет соединения'
+    write_label['text'] = 'Отправка: нет соединения'
+    nickname_label['text'] = 'Имя пользователя: неизвестно'
 
     while True:
         msg = await status_updates_queue.get()

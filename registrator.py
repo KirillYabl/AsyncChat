@@ -27,7 +27,7 @@ async def register(host: str, port: int, credential_path: Path, sending_queue: a
                    creds_updates_queue: asyncio.Queue) -> None:
     """Register in chat coroutine. While true loop because interface supports many registrations"""
     while True:
-        logger.info(f'registration...')
+        logger.info('registration...')
         async with open_connection(host, port) as (reader, writer):
             greeting_msg = await reader.readline()
             logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
@@ -53,7 +53,7 @@ async def register(host: str, port: int, credential_path: Path, sending_queue: a
         async with aiofiles.open(credential_path, 'a', encoding='UTF8') as f:
             await f.write(json.dumps(credentials) + '\n')
 
-        logger.info(f'success registration')
+        logger.info('success registration')
 
 
 @dataclass

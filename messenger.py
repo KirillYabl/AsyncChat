@@ -87,7 +87,7 @@ class Messenger:
                 # double \n because chat require empty string for message sending
                 await self.write_message_in_stream(writer, f'{message}\n\n')
 
-                self.logger.info(f'message submitted')
+                self.logger.info('message submitted')
                 self.watchdog_queue.put_nowait('Message sent')
 
     async def write_message_in_stream(self, writer: asyncio.StreamWriter, text: str) -> None:
@@ -102,7 +102,7 @@ class Messenger:
         Authorization by token from args
         Return bool value of authorization result
         """
-        self.logger.info(f'authorization...')
+        self.logger.info('authorization...')
         async with open_connection(self.write_host, self.write_port) as (reader, writer):
             greeting_msg = await reader.readline()
             self.logger.debug(f'RECEIVE: {greeting_msg.decode().strip()}')
@@ -120,7 +120,7 @@ class Messenger:
                 return False
 
         self.status_updates_queue.put_nowait(gui.NicknameReceived(creds['nickname']))
-        self.logger.info(f'success authorization')
+        self.logger.info('success authorization')
         return True
 
     async def watch_for_connection(self) -> None:
@@ -128,10 +128,10 @@ class Messenger:
         while True:
             try:
                 send_empty_message_every_seconds = 5
-                async with timeout(timeout_seconds) as cm:
+                async with timeout(timeout_seconds):
                     message = await self.watchdog_queue.get()
                     self.watchdog_logger.debug(f'Connection is alive. {message}')
-                    self.sending_queue.put_nowait('')
+                    self.sending_queue.put_nowait('')  # ping pong
                     await anyio.sleep(send_empty_message_every_seconds)
             except TimeoutError:
                 self.watchdog_logger.warning(f'{timeout_seconds}s timeout is elapsed')
