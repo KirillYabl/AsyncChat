@@ -100,6 +100,7 @@ class Messenger:
     async def authorize_in_chat_by_token(self) -> bool:
         """
         Authorization by token from args
+
         Return bool value of authorization result
         """
         self.logger.info('authorization...')

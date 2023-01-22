@@ -60,6 +60,7 @@ async def register(options: Options) -> dict[str, str]:
 async def submit_message(options: Options) -> None:
     """
     Submit message in chat.
+
     In this function token always in options and always valid
     """
     logger.info('submit message...')
@@ -81,6 +82,7 @@ async def submit_message(options: Options) -> None:
 async def authorize(options: Options) -> bool:
     """
     Authorization from db data by mane or by token from args
+
     Return bool value of authorization result
     """
     logger.info('authorization...')

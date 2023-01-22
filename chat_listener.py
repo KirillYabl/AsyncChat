@@ -21,16 +21,14 @@ class Options:
 
 
 async def echo_chat(options: Options) -> None:
-    async with (
-        open_connection(options.host, options.port) as (reader, writer),
-        aiofiles.open(options.history_path, 'a', encoding='UTF8') as f
-    ):
-        while not reader.at_eof():
-            message = await reader.readline()
-            formatted_now = datetime.datetime.now().strftime('%d.%m.%y %H:%M')
-            message = f'[{formatted_now}] {message.decode()}'
-            logger.debug(f'RECEIVE: {message.strip()}')
-            await f.write(message)
+    async with open_connection(options.host, options.port) as (reader, writer):
+        async with aiofiles.open(options.history_path, 'a', encoding='UTF8') as f:
+            while not reader.at_eof():
+                message = await reader.readline()
+                formatted_now = datetime.datetime.now().strftime('%d.%m.%y %H:%M')
+                message = f'[{formatted_now}] {message.decode()}'
+                logger.debug(f'RECEIVE: {message.strip()}')
+                await f.write(message)
 
 
 if __name__ == '__main__':
@@ -42,8 +40,13 @@ if __name__ == '__main__':
 
     parser.add_argument('-host', '--host', type=str, required=True, help='host of chat')
     parser.add_argument('-p', '--port', type=int, required=True, help='port of chat')
-    parser.add_argument('-hp', '--history_path',
-                        type=Path, required=True, help='path to file with messages')
+    parser.add_argument(
+        '-hp',
+        '--history_path',
+        type=Path,
+        required=True,
+        help='path to file with messages',
+    )
     parser.add_argument('-l', '--logging', action='store_true', default=False, help='is do logging')
 
     args = parser.parse_args()
